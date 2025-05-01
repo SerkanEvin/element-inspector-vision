@@ -11,7 +11,7 @@ const CompareTabContent = ({
   previousData 
 }: CompareTabContentProps) => {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <ElementComparison 
         currentData={currentData} 
         previousData={previousData} 

@@ -17,75 +17,42 @@ export const useElementExtraction = () => {
   const [isExtracting, setIsExtracting] = useState(false);
 
   useEffect(() => {
-    // Check if we're in a Chrome extension environment
-    const isExtension = !!(window as any).chrome?.runtime?.id;
-    
-    if (isExtension) {
-      // Load any previously stored data
-      (window as any).chrome.storage.local.get(['previousElementsData'], (result: any) => {
-        if (result.previousElementsData) {
-          setPreviousData(result.previousElementsData);
-        }
-      });
-    }
+    // Load any previously stored data when the popup opens
+    chrome.storage.local.get(['previousElementsData'], (result) => {
+      if (result.previousElementsData) {
+        setPreviousData(result.previousElementsData);
+      }
+    });
   }, []);
 
   const handleExtractElements = async () => {
     setIsExtracting(true);
     
-    // Check if we're in a Chrome extension environment
-    if ((window as any).chrome?.tabs) {
-      try {
-        // Get current active tab
-        const [tab] = await new Promise<chrome.tabs.Tab[]>((resolve) => {
-          (window as any).chrome.tabs.query({ active: true, currentWindow: true }, resolve);
-        });
-        
-        if (tab.id) {
-          // Execute content script to extract elements
-          (window as any).chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            function: extractPageElements
-          }, (results: any) => {
-            if (results && results[0]?.result) {
-              const extractedData = results[0].result;
-              setElementsData(extractedData);
-              
-              // Store this data for future comparisons
-              (window as any).chrome.storage.local.set({ 'previousElementsData': extractedData });
-            }
-            setIsExtracting(false);
-          });
-        }
-      } catch (error) {
-        console.error("Error extracting elements:", error);
-        setIsExtracting(false);
-      }
-    } else {
-      // For development outside Chrome extension
-      // Mock data for testing
-      const mockData = {
-        buttons: [
-          {
-            type: "button",
-            text: "Submit",
-            xpath: "/html/body/div/button[1]",
-            css_selector: "button#submit-btn",
-            attributes: {
-              id: "submit-btn",
-              class: "btn primary",
-              type: "submit"
-            }
-          }
-        ],
-        forms: [],
-        inputs: []
-      };
+    try {
+      // Get current active tab
+      const [tab] = await new Promise<chrome.tabs.Tab[]>((resolve) => {
+        chrome.tabs.query({ active: true, currentWindow: true }, resolve);
+      });
       
-      setTimeout(() => {
-        setElementsData(mockData);
-        setIsExtracting(false);
-      }, 1000);
+      if (tab.id) {
+        // Execute content script to extract elements
+        chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          function: extractPageElements
+        }, (results) => {
+          if (results && results[0]?.result) {
+            const extractedData = results[0].result;
+            setElementsData(extractedData);
+            
+            // Store this data for future comparisons
+            chrome.storage.local.set({ 'previousElementsData': extractedData });
+          }
+          setIsExtracting(false);
+        });
+      }
+    } catch (error) {
+      console.error("Error extracting elements:", error);
+      setIsExtracting(false);
     }
   };
 

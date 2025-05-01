@@ -17,14 +17,14 @@ const ExtractTabContent = ({
   onDownloadJson 
 }: ExtractTabContentProps) => {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <ElementExtractor 
         onExtract={onExtract} 
         isExtracting={isExtracting}
       />
       
       {elementsData && (
-        <div className="space-y-6">
+        <div className="space-y-4">
           <ElementList elementsData={elementsData} />
           
           <div className="flex justify-end">
