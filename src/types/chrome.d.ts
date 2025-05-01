@@ -29,11 +29,12 @@ declare namespace chrome {
     const id: string;
     
     function sendMessage(message: any, callback?: (response: any) => void): void;
-    function onMessage: {
+    
+    const onMessage: {
       addListener: (callback: (message: any, sender: any, sendResponse: (response?: any) => void) => void) => void;
     };
     
-    function onInstalled: {
+    const onInstalled: {
       addListener: (callback: (details: any) => void) => void;
     };
   }
