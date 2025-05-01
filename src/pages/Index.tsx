@@ -15,11 +15,11 @@ const Index = () => {
 
   useEffect(() => {
     // Check if we're in a Chrome extension environment
-    const isExtension = !!chrome?.runtime?.id;
+    const isExtension = !!(window as any).chrome?.runtime?.id;
     
     if (isExtension) {
       // Load any previously stored data
-      chrome.storage.local.get(['previousElementsData'], (result) => {
+      (window as any).chrome.storage.local.get(['previousElementsData'], (result: any) => {
         if (result.previousElementsData) {
           setPreviousData(result.previousElementsData);
         }
@@ -31,23 +31,25 @@ const Index = () => {
     setIsExtracting(true);
     
     // Check if we're in a Chrome extension environment
-    if (chrome?.tabs) {
+    if ((window as any).chrome?.tabs) {
       try {
         // Get current active tab
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const [tab] = await new Promise<chrome.tabs.Tab[]>((resolve) => {
+          (window as any).chrome.tabs.query({ active: true, currentWindow: true }, resolve);
+        });
         
         if (tab.id) {
           // Execute content script to extract elements
-          chrome.scripting.executeScript({
+          (window as any).chrome.scripting.executeScript({
             target: { tabId: tab.id },
             function: extractPageElements
-          }, (results) => {
+          }, (results: any) => {
             if (results && results[0]?.result) {
               const extractedData = results[0].result;
               setElementsData(extractedData);
               
               // Store this data for future comparisons
-              chrome.storage.local.set({ 'previousElementsData': extractedData });
+              (window as any).chrome.storage.local.set({ 'previousElementsData': extractedData });
             }
             setIsExtracting(false);
           });
@@ -239,7 +241,7 @@ function extractPageElements() {
   };
   
   const extractElements = () => {
-    const result = {
+    const result: any = {
       buttons: [],
       forms: [],
       inputs: [],
@@ -250,10 +252,10 @@ function extractPageElements() {
     
     // Extract buttons
     const buttons = document.querySelectorAll('button, input[type="button"], input[type="submit"], [role="button"]');
-    buttons.forEach(button => {
+    buttons.forEach((button: Element) => {
       result.buttons.push({
         type: "button",
-        text: button.textContent?.trim() || button.value || "",
+        text: button.textContent?.trim() || (button as HTMLInputElement).value || "",
         xpath: getXPath(button),
         css_selector: getCssSelector(button),
         attributes: getAttributes(button)
@@ -262,7 +264,7 @@ function extractPageElements() {
     
     // Extract forms
     const forms = document.querySelectorAll('form');
-    forms.forEach(form => {
+    forms.forEach((form: Element) => {
       result.forms.push({
         type: "form",
         xpath: getXPath(form),
@@ -273,10 +275,10 @@ function extractPageElements() {
     
     // Extract inputs
     const inputs = document.querySelectorAll('input:not([type="button"]):not([type="submit"]), textarea');
-    inputs.forEach(input => {
+    inputs.forEach((input: Element) => {
       result.inputs.push({
         type: "input",
-        name: input.name || "",
+        name: (input as HTMLInputElement).name || "",
         xpath: getXPath(input),
         css_selector: getCssSelector(input),
         attributes: getAttributes(input)
@@ -285,14 +287,14 @@ function extractPageElements() {
     
     // Extract selects
     const selects = document.querySelectorAll('select');
-    selects.forEach(select => {
+    selects.forEach((select: Element) => {
       result.selects.push({
         type: "select",
-        name: select.name || "",
+        name: (select as HTMLSelectElement).name || "",
         xpath: getXPath(select),
         css_selector: getCssSelector(select),
         attributes: getAttributes(select),
-        options: Array.from(select.options).map(option => ({
+        options: Array.from((select as HTMLSelectElement).options).map(option => ({
           value: option.value,
           text: option.text,
           selected: option.selected
@@ -302,11 +304,11 @@ function extractPageElements() {
     
     // Extract links
     const links = document.querySelectorAll('a');
-    links.forEach(link => {
+    links.forEach((link: Element) => {
       result.links.push({
         type: "link",
         text: link.textContent?.trim() || "",
-        href: link.href || "",
+        href: (link as HTMLAnchorElement).href || "",
         xpath: getXPath(link),
         css_selector: getCssSelector(link),
         attributes: getAttributes(link)

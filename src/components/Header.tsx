@@ -6,8 +6,8 @@ const Header = () => {
   
   useEffect(() => {
     // Check if we're in a Chrome extension environment
-    if (chrome?.tabs) {
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if ((window as any).chrome?.tabs) {
+      (window as any).chrome.tabs.query({ active: true, currentWindow: true }, (tabs: chrome.tabs.Tab[]) => {
         if (tabs[0]?.url) {
           setUrl(tabs[0].url);
         }
