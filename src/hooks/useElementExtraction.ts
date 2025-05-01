@@ -1,57 +1,123 @@
 
 import { useState, useEffect } from 'react';
-import { extractPageElements } from '@/utils/elementExtractor';
-
-interface ElementsData {
-  buttons: any[];
-  forms: any[];
-  inputs: any[];
-  selects?: any[];
-  links?: any[];
-  others?: any[];
-}
+import { toast } from '@/hooks/use-toast';
 
 export const useElementExtraction = () => {
-  const [elementsData, setElementsData] = useState<ElementsData | null>(null);
-  const [previousData, setPreviousData] = useState<ElementsData | null>(null);
+  const [elementsData, setElementsData] = useState<any | null>(null);
+  const [previousData, setPreviousData] = useState<any | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
 
+  // Load previously stored data on component mount
   useEffect(() => {
-    // Load any previously stored data when the popup opens
-    chrome.storage.local.get(['previousElementsData'], (result) => {
-      if (result.previousElementsData) {
-        setPreviousData(result.previousElementsData);
+    const loadStoredData = async () => {
+      try {
+        if (typeof chrome !== 'undefined' && chrome.storage) {
+          chrome.storage.local.get(['elementsData'], (result) => {
+            if (result.elementsData) {
+              setPreviousData(result.elementsData);
+            }
+          });
+        } else {
+          console.log('Chrome storage API not available - running in development mode');
+        }
+      } catch (error) {
+        console.error('Error loading stored data:', error);
       }
-    });
+    };
+
+    loadStoredData();
   }, []);
 
-  const handleExtractElements = async () => {
+  const handleExtractElements = () => {
     setIsExtracting(true);
-    
+
     try {
-      // Get current active tab
-      const [tab] = await new Promise<chrome.tabs.Tab[]>((resolve) => {
-        chrome.tabs.query({ active: true, currentWindow: true }, resolve);
-      });
-      
-      if (tab.id) {
-        // Execute content script to extract elements
-        chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          function: extractPageElements
-        }, (results) => {
-          if (results && results[0]?.result) {
-            const extractedData = results[0].result;
-            setElementsData(extractedData);
-            
-            // Store this data for future comparisons
-            chrome.storage.local.set({ 'previousElementsData': extractedData });
+      if (typeof chrome !== 'undefined' && chrome.tabs) {
+        // Chrome extension environment
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          const activeTab = tabs[0];
+          
+          if (activeTab?.id) {
+            chrome.scripting.executeScript({
+              target: { tabId: activeTab.id },
+              files: ['contentScript.js']
+            }, () => {
+              if (chrome.runtime.lastError) {
+                console.error('Error executing script:', chrome.runtime.lastError);
+                toast({
+                  title: 'Extraction Error',
+                  description: 'Failed to execute element extraction script',
+                  variant: 'destructive'
+                });
+                setIsExtracting(false);
+                return;
+              }
+
+              // Listen for message from content script
+              const messageListener = (message: any, sender: any) => {
+                if (message.type === 'ELEMENTS_EXTRACTED') {
+                  setElementsData(message.data);
+                  
+                  // Store current data for future comparison
+                  if (chrome.storage) {
+                    chrome.storage.local.set({ elementsData: message.data });
+                  }
+                  
+                  // Save previous data
+                  if (elementsData) {
+                    setPreviousData(elementsData);
+                  }
+                  
+                  setIsExtracting(false);
+                  toast({
+                    title: 'Extraction Complete',
+                    description: `Extracted ${Object.values(message.data).flat().length} elements`,
+                  });
+                  
+                  // Remove the listener
+                  chrome.runtime.onMessage.removeListener(messageListener);
+                }
+              };
+              
+              chrome.runtime.onMessage.addListener(messageListener);
+            });
           }
-          setIsExtracting(false);
         });
+      } else {
+        // Development environment - mock data for testing
+        console.log('Running in development mode - using mock data');
+        setTimeout(() => {
+          const mockData = {
+            buttons: [{ 
+              type: 'button', 
+              text: 'Example Button', 
+              xpath: '/html/body/div/button[1]',
+              css_selector: 'button.primary',
+              attributes: { id: 'btn-1', class: 'primary' } 
+            }],
+            forms: [{ 
+              type: 'form', 
+              xpath: '/html/body/div/form',
+              css_selector: 'form#contact',
+              attributes: { id: 'contact', method: 'post' } 
+            }],
+            inputs: []
+          };
+          setElementsData(mockData);
+          setIsExtracting(false);
+          toast({
+            title: 'Development Mode',
+            description: 'Using mock data for testing',
+          });
+        }, 1000);
       }
     } catch (error) {
-      console.error("Error extracting elements:", error);
+      console.error('Error during extraction:', error);
+      toast({
+        title: 'Extraction Error',
+        description: 'An unexpected error occurred',
+        variant: 'destructive'
+      });
       setIsExtracting(false);
     }
   };
@@ -60,23 +126,21 @@ export const useElementExtraction = () => {
     if (!elementsData) return;
     
     const dataStr = JSON.stringify(elementsData, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
+    const dataUri = `data:application/json;charset=utf-8,${encodeURIComponent(dataStr)}`;
     
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'element-data.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const exportFileDefaultName = `page-elements-${new Date().toISOString().slice(0, 10)}.json`;
+    
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
   };
 
-  return { 
-    elementsData, 
-    previousData, 
-    isExtracting, 
-    handleExtractElements, 
-    handleDownloadJson 
+  return {
+    elementsData,
+    previousData,
+    isExtracting,
+    handleExtractElements,
+    handleDownloadJson
   };
 };
